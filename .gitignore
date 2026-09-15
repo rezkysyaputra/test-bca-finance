@@ -1,0 +1,28 @@
+# SQLite database
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+*.db
+
+# Uploaded documents
+uploads/*
+!uploads/.gitkeep
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+test-bca-finance
+
+# Environment & local files
+.env
+*.log
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
