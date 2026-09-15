@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales - Pengajuan Kredit</title>
+</head>
+<body>
+    <h2>BCA Finance — Portal Sales</h2>
+    <p>
+        Login sebagai: <b id="userInfo">-</b> |
+        <button type="button" onclick="logout()">Logout</button> |
+        <a href="/approval">Ke Halaman Approval</a>
+    </p>
+    <hr>
+
+    <h3>Form Input Pengajuan Kredit Baru</h3>
+    <form id="appForm">
+        <h4>1. Data Debitur</h4>
+        <p>Nama: <br><input type="text" id="custName" required placeholder="Budi Santoso"></p>
+        <p>NIK: <br><input type="text" id="custNIK" required placeholder="3201234567890001" maxlength="16"></p>
+        <p>No HP: <br><input type="text" id="custPhone" placeholder="08123456789"></p>
+        <p>Alamat: <br><textarea id="custAddress" rows="2" cols="40" placeholder="Jl. Sudirman No 10"></textarea></p>
+
+        <h4>2. Data Kendaraan & Pembiayaan</h4>
+        <p>Pilih Kendaraan: <br>
+            <select id="vehicleSelect" required onchange="calc()">
+                <option value="">-- Pilih Kendaraan --</option>
+            </select>
+        </p>
+        <p>Harga OTR: <br><input type="text" id="vehiclePrice" readonly></p>
+        <p>Uang Muka (DP): <br><input type="number" id="dpAmount" required placeholder="50000000" oninput="calc()"></p>
+        <p>Tenor (Bulan): <br>
+            <select id="tenorSelect" onchange="calc()">
+                <option value="12">12 Bulan</option>
+                <option value="24" selected>24 Bulan</option>
+                <option value="36">36 Bulan</option>
+                <option value="48">48 Bulan</option>
+                <option value="60">60 Bulan</option>
+            </select>
+        </p>
+        <p><b>Estimasi Angsuran: </b><span id="estInstallment">Rp 0</span> / bulan</p>
+        <button type="submit">Simpan Pengajuan (Draft)</button>
+    </form>
+
+    <hr>
+    <h3>Daftar Pengajuan Kredit</h3>
+    <button type="button" onclick="loadApps()">Refresh Tabel</button>
+    <br><br>
+    <table border="1" cellpadding="6" cellspacing="0">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nama Debitur</th>
+                <th>NIK</th>
+                <th>Kendaraan</th>
+                <th>DP</th>
+                <th>Tenor</th>
+                <th>Angsuran</th>
+                <th>Status</th>
+                <th>Upload Berkas (KTP/KK/SPK)</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody id="appTbody">
+            <tr><td colspan="10">Memuat data...</td></tr>
+        </tbody>
+    </table>
+
+<script>
+const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+if (!token) {
+    window.location.href = '/';
+} else {
+    document.getElementById('userInfo').textContent = `${user.username} (${user.role})`;
+}
+
+function logout() {
+    localStorage.clear();
+    window.location.href = '/';
+}
+
+function rupiah(num) {
+    return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
+}
+
+async function loadVehicles() {
+    const res = await fetch('/api/vehicles', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+        const vehicles = await res.json();
+        const select = document.getElementById('vehicleSelect');
+        vehicles.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `${v.brand} ${v.model} - ${rupiah(v.price)}`;
+            opt.dataset.price = v.price;
+            select.appendChild(opt);
+        });
+    }
+}
+
+function calc() {
+    const select = document.getElementById('vehicleSelect');
+    const price = Number(select.selectedOptions[0]?.dataset.price || 0);
+    document.getElementById('vehiclePrice').value = rupiah(price);
+
+    const dp = Number(document.getElementById('dpAmount').value || 0);
+    const tenor = Number(document.getElementById('tenorSelect').value || 24);
+
+    if (price > 0 && dp > 0 && dp < price) {
+        const principal = price - dp;
+        const interest = principal * 0.08 * (tenor / 12);
+        const installment = Math.round((principal + interest) / tenor);
+        document.getElementById('estInstallment').textContent = rupiah(installment);
+    } else {
+        document.getElementById('estInstallment').textContent = 'Rp 0';
+    }
+}
+
+async function loadApps() {
+    const res = await fetch('/api/applications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const tbody = document.getElementById('appTbody');
+    if (!res.ok) {
+        tbody.innerHTML = `<tr><td colspan="10">Gagal memuat data</td></tr>`;
+        return;
+    }
+    const apps = await res.json();
+    if (!apps || apps.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10">Belum ada pengajuan. Silakan isi form di atas terlebih dahulu.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = apps.map(a => `
+        <tr>
+            <td>#${a.id}</td>
+            <td>${a.customer ? a.customer.name : '-'}</td>
+            <td>${a.customer ? a.customer.nik : '-'}</td>
+            <td>${a.vehicle ? a.vehicle.brand + ' ' + a.vehicle.model : '-'}</td>
+            <td>${rupiah(a.down_payment)}</td>
+            <td>${a.tenor} bln</td>
+            <td><b>${rupiah(a.installment)}</b></td>
+            <td><b>${a.status}</b></td>
+            <td>
+                ${a.status === 'DRAFT' ? `
+                    <select id="type-${a.id}">
+                        <option value="KTP">KTP</option>
+                        <option value="KK">KK</option>
+                        <option value="SPK">SPK</option>
+                        <option value="BUKTI_BAYAR">Bukti Bayar</option>
+                    </select>
+                    <input type="file" id="file-${a.id}">
+                    <button type="button" onclick="uploadDirect(${a.id})">Upload</button>
+                ` : '<small>Pengajuan sudah diproses</small>'}
+            </td>
+            <td>
+                ${a.status === 'DRAFT' ? `
+                    <button type="button" onclick="submitApp(${a.id})">Submit ke Supervisor</button>
+                ` : 'Terkirim'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+document.getElementById('appForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+        customer_name: document.getElementById('custName').value,
+        customer_nik: document.getElementById('custNIK').value,
+        customer_phone: document.getElementById('custPhone').value,
+        customer_address: document.getElementById('custAddress').value,
+        vehicle_id: Number(document.getElementById('vehicleSelect').value),
+        down_payment: Number(document.getElementById('dpAmount').value),
+        tenor: Number(document.getElementById('tenorSelect').value)
+    };
+
+    const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        alert('Pengajuan #' + data.id + ' berhasil dibuat! Silakan upload dokumen pada baris pengajuan #' + data.id + ' di tabel.');
+        document.getElementById('appForm').reset();
+        document.getElementById('estInstallment').textContent = 'Rp 0';
+        loadApps();
+    } else {
+        alert('Error: ' + (data.error || 'Gagal menyimpan'));
+    }
+});
+
+async function uploadDirect(appID) {
+    const fileInput = document.getElementById(`file-${appID}`);
+    const docType = document.getElementById(`type-${appID}`).value;
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Pilih file terlebih dahulu!');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('document_type', docType);
+    formData.append('file', fileInput.files[0]);
+
+    const res = await fetch(`/api/applications/${appID}/documents`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        alert(`Dokumen ${docType} berhasil diupload untuk pengajuan #${appID}!`);
+        fileInput.value = '';
+    } else {
+        alert('Upload gagal: ' + (data.error || 'Terjadi kesalahan'));
+    }
+}
+
+async function submitApp(id) {
+    if (!confirm('Submit pengajuan #' + id + ' ke Supervisor?')) return;
+    const res = await fetch(`/api/applications/${id}/submit`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+        alert('Pengajuan #' + id + ' berhasil disubmit ke Supervisor!');
+        loadApps();
+    } else {
+        alert('Submit gagal: ' + (data.error || 'Terjadi kesalahan'));
+    }
+}
+
+loadVehicles();
+loadApps();
+</script>
+</body>
+</html>

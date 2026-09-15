@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Supervisor - Approval Pengajuan</title>
+</head>
+<body>
+    <h2>BCA Finance — Portal Supervisor / Approver</h2>
+    <p>
+        Login sebagai: <b id="userInfo">-</b> |
+        <button type="button" onclick="logout()">Logout</button> |
+        <a href="/applications">Ke Halaman Sales</a>
+    </p>
+    <hr>
+
+    <h3>Antrean Pengajuan Kredit</h3>
+    <button type="button" onclick="loadApps()">Refresh Antrean</button>
+    <br><br>
+    <table border="1" cellpadding="6" cellspacing="0">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Debitur</th>
+                <th>Kendaraan</th>
+                <th>DP</th>
+                <th>Tenor</th>
+                <th>Angsuran</th>
+                <th>Status</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody id="appTbody">
+            <tr><td colspan="8">Memuat data...</td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+    <div id="reviewSection" style="display: none;">
+        <h3>Detail Review Pengajuan #<span id="detID">-</span></h3>
+        <p><b>Status Saat Ini:</b> <span id="detStatus">-</span></p>
+
+        <h4>Data Debitur</h4>
+        <p>Nama: <span id="detName">-</span></p>
+        <p>NIK: <span id="detNIK">-</span></p>
+        <p>No HP: <span id="detPhone">-</span></p>
+        <p>Alamat: <span id="detAddress">-</span></p>
+
+        <h4>Data Kendaraan & Pembiayaan</h4>
+        <p>Kendaraan: <span id="detVehicle">-</span></p>
+        <p>Harga OTR: <span id="detPrice">-</span></p>
+        <p>Down Payment: <span id="detDP">-</span></p>
+        <p>Tenor: <span id="detTenor">-</span> bulan</p>
+        <p>Angsuran: <b><span id="detInstallment">-</span> / bulan</b></p>
+
+        <h4>Dokumen Lampiran</h4>
+        <div id="detDocs">Tidak ada dokumen.</div>
+
+        <br>
+        <h4>Keputusan Approval</h4>
+        <p>Catatan Reviewer / Alasan:<br>
+            <textarea id="notes" rows="3" cols="50" placeholder="Tuliskan catatan persetujuan atau alasan penolakan..."></textarea>
+        </p>
+        <p id="actionButtons">
+            <button type="button" onclick="decision('approve')" style="background-color: lightgreen; font-weight: bold; padding: 6px 16px;">SETUJUI (APPROVE)</button>
+            &nbsp;&nbsp;
+            <button type="button" onclick="decision('reject')" style="background-color: lightcoral; font-weight: bold; padding: 6px 16px;">TOLAK (REJECT)</button>
+        </p>
+        <p id="readOnlyNotice" style="display:none; color: gray;">
+            <i>Pengajuan ini sudah berstatus final dan tidak dapat diubah lagi.</i>
+        </p>
+    </div>
+
+<script>
+const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+let activeID = null;
+
+if (!token) {
+    window.location.href = '/';
+} else {
+    document.getElementById('userInfo').textContent = `${user.username} (${user.role})`;
+}
+
+function logout() {
+    localStorage.clear();
+    window.location.href = '/';
+}
+
+function rupiah(num) {
+    return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
+}
+
+async function loadApps() {
+    const res = await fetch('/api/applications', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const tbody = document.getElementById('appTbody');
+    if (!res.ok) {
+        tbody.innerHTML = `<tr><td colspan="8">Gagal memuat data</td></tr>`;
+        return;
+    }
+    const apps = await res.json();
+    if (!apps || apps.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8">Tidak ada pengajuan.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = apps.map(a => `
+        <tr style="${a.status === 'SUBMITTED' ? 'background-color: #fff3cd;' : ''}">
+            <td>#${a.id}</td>
+            <td>${a.customer ? a.customer.name : '-'}</td>
+            <td>${a.vehicle ? a.vehicle.brand + ' ' + a.vehicle.model : '-'}</td>
+            <td>${rupiah(a.down_payment)}</td>
+            <td>${a.tenor} bln</td>
+            <td><b>${rupiah(a.installment)}</b></td>
+            <td><b>${a.status}</b></td>
+            <td>
+                <button type="button" onclick="review(${a.id})">
+                    ${a.status === 'SUBMITTED' ? 'Review & Putuskan' : 'Lihat Detail'}
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function review(id) {
+    activeID = id;
+    const res = await fetch(`/api/applications/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) return alert('Gagal memuat data pengajuan #' + id);
+
+    const app = await res.json();
+    document.getElementById('detID').textContent = app.id;
+    document.getElementById('detStatus').textContent = app.status;
+
+    document.getElementById('detName').textContent = app.customer ? app.customer.name : '-';
+    document.getElementById('detNIK').textContent = app.customer ? app.customer.nik : '-';
+    document.getElementById('detPhone').textContent = app.customer ? app.customer.phone : '-';
+    document.getElementById('detAddress').textContent = app.customer ? app.customer.address : '-';
+
+    document.getElementById('detVehicle').textContent = app.vehicle ? (app.vehicle.brand + ' ' + app.vehicle.model) : '-';
+    document.getElementById('detPrice').textContent = rupiah(app.vehicle ? app.vehicle.price : 0);
+    document.getElementById('detDP').textContent = rupiah(app.down_payment);
+    document.getElementById('detTenor').textContent = app.tenor;
+    document.getElementById('detInstallment').textContent = rupiah(app.installment);
+
+    const docDiv = document.getElementById('detDocs');
+    if (app.documents && app.documents.length > 0) {
+        docDiv.innerHTML = '<ul>' + app.documents.map(d => `
+            <li><a href="/${d.file_path}" target="_blank">Lihat Berkas: <b>${d.document_type}</b></a></li>
+        `).join('') + '</ul>';
+    } else {
+        docDiv.textContent = 'Belum ada dokumen yang diunggah.';
+    }
+
+    if (app.status === 'SUBMITTED') {
+        document.getElementById('actionButtons').style.display = 'block';
+        document.getElementById('readOnlyNotice').style.display = 'none';
+    } else {
+        document.getElementById('actionButtons').style.display = 'none';
+        document.getElementById('readOnlyNotice').style.display = 'block';
+    }
+
+    document.getElementById('notes').value = '';
+    document.getElementById('reviewSection').style.display = 'block';
+    window.location.hash = '#reviewSection';
+}
+
+async function decision(act) {
+    const notes = document.getElementById('notes').value;
+    if (!confirm(`Konfirmasi untuk ${act.toUpperCase()} pengajuan #${activeID}?`)) return;
+
+    const res = await fetch(`/api/applications/${activeID}/${act}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ notes })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+        alert(`Pengajuan #${activeID} berhasil di-${act.toUpperCase()}`);
+        document.getElementById('reviewSection').style.display = 'none';
+        loadApps();
+    } else {
+        alert('Gagal: ' + (data.error || 'Terjadi kesalahan'));
+    }
+}
+
+loadApps();
+</script>
+</body>
+</html>

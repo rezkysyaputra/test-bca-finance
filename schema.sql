@@ -1,0 +1,57 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    nik TEXT NOT NULL UNIQUE,
+    phone TEXT,
+    address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dealer TEXT NOT NULL,
+    brand TEXT NOT NULL,
+    model TEXT NOT NULL,
+    price REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    down_payment REAL NOT NULL,
+    tenor INTEGER NOT NULL,
+    installment REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS application_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL REFERENCES applications(id),
+    document_type TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS application_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL REFERENCES applications(id),
+    approver_id INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL,
+    notes TEXT,
+    approved_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

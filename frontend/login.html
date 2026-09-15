@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - BCA Finance</title>
+</head>
+<body>
+    <h2>BCA Finance - Login</h2>
+    <div id="msg" style="color: red;"></div>
+
+    <form id="loginForm">
+        <div>
+            <label>Username:</label><br>
+            <input type="text" id="username" required>
+        </div>
+        <br>
+        <div>
+            <label>Password:</label><br>
+            <input type="password" id="password" value="password123" required>
+        </div>
+        <br>
+        <button type="submit">Login</button>
+    </form>
+
+    <hr>
+    <p>Login Cepat (Test):</p>
+    <button type="button" onclick="quick('sales1')">Login Sales (sales1)</button>
+    <button type="button" onclick="quick('approver1')">Login Approver (approver1)</button>
+
+<script>
+function quick(u) {
+    document.getElementById('username').value = u;
+    document.getElementById('password').value = 'password123';
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('msg');
+    msg.textContent = '';
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const text = await res.text();
+        let data = {};
+        try {
+            data = JSON.parse(text);
+        } catch (err) {
+            throw new Error(`Server Error (${res.status}): ${text || 'Respons kosong dari server'}`);
+        }
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Login gagal');
+        }
+
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        if (data.user.role === 'APPROVER') {
+            window.location.href = '/approval';
+        } else {
+            window.location.href = '/applications';
+        }
+    } catch (err) {
+        msg.textContent = err.message;
+    }
+});
+</script>
+</body>
+</html>
